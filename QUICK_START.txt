@@ -1,0 +1,91 @@
+╔════════════════════════════════════════════════════════════════════╗
+║                    WINDOWSUPPORT                                   ║
+║                 QUICK START GUIDE                                  ║
+╚════════════════════════════════════════════════════════════════════╝
+
+TWO SIMPLE STEPS:
+═════════════════
+
+STEP 1: BUILD THE EXECUTABLES
+──────────────────────────────
+Right-click PowerShell → Run as Administrator
+
+Then run:
+    PowerShell -ExecutionPolicy Bypass -File .\rebuild_all.ps1
+
+Wait for: "BUILD COMPLETED SUCCESSFULLY!" ✓
+
+
+STEP 2: INSTALL
+───────────────
+Right-click → INSTALL_WindowSupport.bat → Run as Administrator
+
+Follow the prompts:
+  1. Select which user to install for
+  2. Wait for files to copy
+  3. Select your Staff ID (30 seconds)
+  4. Done!
+
+═══════════════════════════════════════════════════════════════════════
+
+WHAT THE INSTALLER DOES:
+═════════════════════════
+
+✓ Copies files to: C:\Users\[USER]\AppData\Local\WindowSupport
+✓ Adds Windows Defender exclusions
+✓ Configures Staff ID
+✓ Creates scheduled task (auto-start at login)
+✓ Installs Guardian service (monitors & restarts)
+✓ Creates uninstaller
+
+═══════════════════════════════════════════════════════════════════════
+
+VERIFY IT'S WORKING:
+════════════════════
+
+Check scheduled task:
+    schtasks /query /tn "WindowSupportMonitor"
+    
+Check service:
+    sc query WindowSupportGuardian
+    
+Check process:
+    tasklist | find "WindowPowerShellProvider"
+
+═══════════════════════════════════════════════════════════════════════
+
+UNINSTALL:
+══════════
+
+Run this as Administrator:
+    C:\Users\[USER]\AppData\Local\WindowSupport\UNINSTALL.bat
+
+═══════════════════════════════════════════════════════════════════════
+
+TROUBLESHOOTING:
+════════════════
+
+Issue: "Admin privileges required"
+Fix:   Right-click → Run as Administrator
+
+Issue: "Source directory not found"
+Fix:   Run rebuild_all.ps1 first
+
+Issue: App not starting
+Fix:   Check logs at C:\Users\[USER]\AppData\Local\WindowSupport\app.log
+
+═══════════════════════════════════════════════════════════════════════
+
+THAT'S IT! 
+══════════
+
+Your application will:
+  → Start automatically at user login
+  → Monitor itself and restart if needed
+  → Run in the background
+  → Send status updates to the server
+
+═══════════════════════════════════════════════════════════════════════
+
+
+

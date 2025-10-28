@@ -1,0 +1,13 @@
+ @WindowPowerShellProvider.py 
+okay listen to me carefully, this is my production level project, and this @WindowPowerShellProvider.py is transformed into the exe, 
+and deployed on more than 100 plus computers,
+
+but Im having issues, major issues,
+1) as it stoped eventually, and didnt run after that,
+2) sometimes its stoped eventually, but starts running after the is computer ON after the shutdown
+3) and sometimes its running showing in the task manager but not doing anything.
+
+Actually it is deployed on the corporate offices on their employee machines, as it is added in the window startup so employee shift is 9 hours so the exe must running around 9 hours, yes it can be less and more according to the employee.
+
+why it stoped please tell me. 
+and the exe is without screen, onconsole, purely act like a background prcess 
