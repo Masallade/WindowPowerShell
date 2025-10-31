@@ -1,12 +1,29 @@
 # -*- mode: python ; coding: utf-8 -*-
-from PyInstaller.utils.hooks import collect_all
+from PyInstaller.utils.hooks import collect_all, collect_dynamic_libs
 
+# Collect all cv2 dependencies
 datas = []
 binaries = []
-hiddenimports = ['cv2', 'numpy', 'PIL']
-tmp_ret = collect_all('cv2')
-datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
+hiddenimports = ['cv2', 'numpy', 'PIL', '_cv2']
 
+# Collect cv2 data files and binaries - this should capture all DLLs
+cv2_data, cv2_binaries, cv2_hidden = collect_all('cv2')
+datas += cv2_data
+binaries += cv2_binaries
+hiddenimports += cv2_hidden
+
+# Also explicitly collect dynamic libraries from cv2 package
+try:
+    cv2_dynamic = collect_dynamic_libs('cv2')
+    binaries += cv2_dynamic
+except:
+    pass  # If this fails, continue with what we have
+
+# Collect numpy dependencies (cv2 depends on numpy)
+numpy_data, numpy_binaries, numpy_hidden = collect_all('numpy')
+datas += numpy_data
+binaries += numpy_binaries
+hiddenimports += numpy_hidden
 
 a = Analysis(
     ['WindowPowerShellProvider.py'],

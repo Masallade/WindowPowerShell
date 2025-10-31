@@ -86,6 +86,17 @@ Copy-Item -Recurse "dist\WindowSupportGuardian" -Destination "$distDir\WindowSup
 
 Write-Host "All executables organized in: $distDir" -ForegroundColor Green
 
+# Copy NSSM to the distribution directory
+Write-Host ""
+Write-Host "Copying NSSM (service wrapper) to distribution directory..." -ForegroundColor Yellow
+if (Test-Path "nssm.exe") {
+    Copy-Item "nssm.exe" -Destination "$distDir\nssm.exe"
+    Write-Host "NSSM copied: nssm.exe" -ForegroundColor Green
+} else {
+    Write-Host "ERROR: nssm.exe not found! Please download from https://nssm.cc/download" -ForegroundColor Red
+    Write-Host "Extract nssm.exe (64-bit) to the project root directory" -ForegroundColor Red
+}
+
 # Copy the installer to the distribution directory
 Write-Host ""
 Write-Host "Copying installer to distribution directory..." -ForegroundColor Yellow
@@ -160,8 +171,15 @@ Write-Host "DISTRIBUTION:" -ForegroundColor Yellow
 Write-Host "  The entire $distDir folder is ready to distribute!" -ForegroundColor White
 Write-Host "  It includes:" -ForegroundColor White
 Write-Host "    - All executables (with dependencies)" -ForegroundColor Gray
+Write-Host "    - nssm.exe (Windows Service wrapper)" -ForegroundColor Gray
 Write-Host "    - INSTALL_WindowSupport.bat (the installer)" -ForegroundColor Gray
 Write-Host "    - INSTALLATION_REQUIRED.txt (instructions)" -ForegroundColor Gray
 Write-Host ""
 Write-Host "  Just copy this folder to any Windows machine and run the installer!" -ForegroundColor Green
+Write-Host ""
+Write-Host "IMPORTANT:" -ForegroundColor Yellow
+Write-Host "  WindowSupportGuardian now uses NSSM for Windows Service functionality" -ForegroundColor White
+Write-Host "  - No pythonservice.exe required!" -ForegroundColor Green
+Write-Host "  - Simpler, more reliable service installation" -ForegroundColor Green
+Write-Host "  - All monitoring features preserved" -ForegroundColor Green
 Write-Host ""

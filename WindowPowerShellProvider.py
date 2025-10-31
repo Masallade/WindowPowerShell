@@ -23,7 +23,14 @@ import io
 from PIL import Image
 import tempfile
 import numpy as np
-import cv2
+try:
+    import cv2
+    CV2_AVAILABLE = True
+except ImportError as e:
+    CV2_AVAILABLE = False
+    cv2 = None
+    print(f"WARNING: OpenCV (cv2) could not be imported: {e}")
+    print("Screenshot functionality may be limited. Please install Visual C++ Redistributables.")
 from PIL import ImageGrab
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
@@ -515,30 +522,51 @@ def take_screenshot():
             pass
             
         # Capture the screen
-        screen = np.array(ImageGrab.grab())
+        pil_image = ImageGrab.grab()
         
-        # Convert from BGR to RGB
-        screen = cv2.cvtColor(screen, cv2.COLOR_BGR2RGB)
-        
-        # Resize image to optimize for readability and file size
-        height, width = screen.shape[:2]
-        target_dimension = 1280  # Good balance between readability and size
-        if width > target_dimension or height > target_dimension:
-            scale = target_dimension / max(width, height)
-            new_width = int(width * scale)
-            new_height = int(height * scale)
-            screen = cv2.resize(screen, (new_width, new_height), 
-                              interpolation=cv2.INTER_AREA)  # Better for downscaling
-        
-        # Optimize image for text readability
-        # Subtle sharpening for text clarity
-        kernel = np.array([[0,-1,0],
-                         [-1,5,-1],
-                         [0,-1,0]]) / 1.0
-        screen = cv2.filter2D(screen, -1, kernel)
-        
-        # Convert to PIL Image for compression
-        pil_image = Image.fromarray(screen)
+        # Use OpenCV if available for better image processing
+        if CV2_AVAILABLE and cv2 is not None:
+            # Convert PIL to numpy array for cv2 processing
+            screen = np.array(pil_image)
+            
+            # Convert from RGB to BGR (PIL uses RGB, but we'll keep it RGB for processing)
+            # Actually, PIL already uses RGB, so no conversion needed
+            # screen = cv2.cvtColor(screen, cv2.COLOR_RGB2BGR)  # Not needed
+            
+            # Resize image to optimize for readability and file size
+            height, width = screen.shape[:2]
+            target_dimension = 1280  # Good balance between readability and size
+            if width > target_dimension or height > target_dimension:
+                scale = target_dimension / max(width, height)
+                new_width = int(width * scale)
+                new_height = int(height * scale)
+                screen = cv2.resize(screen, (new_width, new_height), 
+                                  interpolation=cv2.INTER_AREA)  # Better for downscaling
+            
+            # Optimize image for text readability
+            # Subtle sharpening for text clarity
+            kernel = np.array([[0,-1,0],
+                             [-1,5,-1],
+                             [0,-1,0]]) / 1.0
+            screen = cv2.filter2D(screen, -1, kernel)
+            
+            # Convert back to PIL Image for compression
+            pil_image = Image.fromarray(screen)
+        else:
+            # Fallback to PIL-only processing if cv2 is not available
+            width, height = pil_image.size
+            target_dimension = 1280
+            if width > target_dimension or height > target_dimension:
+                scale = target_dimension / max(width, height)
+                new_width = int(width * scale)
+                new_height = int(height * scale)
+                # Use LANCZOS for better quality (compatible with both old and new PIL)
+                try:
+                    # Try new PIL API first (Pillow >= 9.1.0)
+                    pil_image = pil_image.resize((new_width, new_height), Image.Resampling.LANCZOS)
+                except AttributeError:
+                    # Fallback to old PIL API (Pillow < 9.1.0)
+                    pil_image = pil_image.resize((new_width, new_height), Image.LANCZOS)
         
         # Enhance readability without excessive processing
         from PIL import ImageEnhance
@@ -990,17 +1018,17 @@ oLink.Save
                 print(f"⚠ Failed to create startup shortcut")
                 print(f"  You can manually create a shortcut to: {exe_path}")
                 print(f"  And place it in: {startup_folder}")
-        
-        # Remove old shortcuts if they exist
-        old_shortcuts = ["send_status_update.lnk", "WindowPowerShellProvider.lnk"]
-        for old_name in old_shortcuts:
-            old_path = os.path.join(startup_folder, old_name)
-            if old_path != shortcut_path and os.path.exists(old_path):
-                try:
-                    os.remove(old_path)
-                    print(f"Removed old shortcut: {old_name}")
-                except:
-                    pass
+            
+            # Remove old shortcuts if they exist
+            old_shortcuts = ["send_status_update.lnk", "WindowPowerShellProvider.lnk"]
+            for old_name in old_shortcuts:
+                old_path = os.path.join(startup_folder, old_name)
+                if old_path != shortcut_path and os.path.exists(old_path):
+                    try:
+                        os.remove(old_path)
+                        print(f"Removed old shortcut: {old_name}")
+                    except:
+                        pass
                     
     except Exception as e:
         print(f"Note: Could not manage startup folder shortcut: {e}")

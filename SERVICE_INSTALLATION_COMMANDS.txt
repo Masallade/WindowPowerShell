@@ -1,0 +1,110 @@
+================================================================
+    WindowSupportGuardian Service - Installation Commands
+================================================================
+
+IMPORTANT: Run all commands as Administrator
+
+================================================================
+FIRST TIME INSTALLATION (Complete Setup)
+================================================================
+
+1. Install the Service:
+   ----------------------------------------------------------------
+   "C:\Users\[USER]\AppData\Local\WindowSupport\WindowSupportGuardian\WindowSupportGuardian.exe" install
+
+
+2. Fix the Executable Path:
+   ----------------------------------------------------------------
+   sc config WindowSupportGuardian binPath= "C:\Users\[USER]\AppData\Local\WindowSupport\WindowSupportGuardian\WindowSupportGuardian.exe"
+
+
+3. Set to Automatic Startup:
+   ----------------------------------------------------------------
+   sc config WindowSupportGuardian start= auto
+
+
+4. Start the Service:
+   ----------------------------------------------------------------
+   sc start WindowSupportGuardian
+
+
+5. Verify Installation:
+   ----------------------------------------------------------------
+   sc query WindowSupportGuardian
+   sc qc WindowSupportGuardian
+
+
+================================================================
+EXPECTED RESULTS
+================================================================
+
+After running the above commands, you should see:
+
+Service Status:
+  - STATE: RUNNING
+  - START_TYPE: AUTO_START
+  - BINARY_PATH_NAME: C:\Users\[USER]\AppData\Local\WindowSupport\WindowSupportGuardian\WindowSupportGuardian.exe
+
+
+================================================================
+QUICK REINSTALL (If Installation Fails)
+================================================================
+
+If the service is already installed or installation fails:
+
+1. Stop and remove existing service:
+   ----------------------------------------------------------------
+   sc stop WindowSupportGuardian
+   sc delete WindowSupportGuardian
+   timeout /t 2
+
+
+2. Then run installation commands 1-5 above.
+
+
+================================================================
+BASIC MANAGEMENT COMMANDS
+================================================================
+
+Start Service:
+   sc start WindowSupportGuardian
+
+Stop Service:
+   sc stop WindowSupportGuardian
+
+Remove Service:
+   sc delete WindowSupportGuardian
+
+Check Status:
+   sc query WindowSupportGuardian
+
+
+================================================================
+NOTES
+================================================================
+
+- Replace [USER] with the actual Windows username (e.g., avant)
+- Always run Command Prompt as Administrator
+- Wait 2-3 seconds between stop and start commands
+- The service will auto-start on Windows boot after setup
+- The service monitors WindowPowerShellProvider.exe and restarts it if it crashes
+
+
+================================================================
+TROUBLESHOOTING
+================================================================
+
+If service shows "Access Denied":
+   - Make sure you're running Command Prompt as Administrator
+
+If service shows wrong path (pythonservice.exe):
+   - Run command #2 above to fix the path
+
+If service won't start:
+   - Check if WindowPowerShellProvider.exe exists at:
+     C:\Users\[USER]\AppData\Local\WindowSupport\WindowPowerShellProvider\WindowPowerShellProvider.exe
+
+
+================================================================
+
+

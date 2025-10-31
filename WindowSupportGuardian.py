@@ -1,8 +1,7 @@
-
 """
-WindowSupport Guardian Service
+WindowSupport Guardian - Background Monitor
 Monitors and restarts WindowPowerShellProvider.exe if it stops
-This runs as a Windows Service (system-level)
+This runs as a background process (managed by NSSM as a Windows Service)
 """
 
 import os
@@ -10,64 +9,59 @@ import sys
 import time
 import subprocess
 import psutil
-import win32serviceutil
-import win32service
-import win32event
-import servicemanager
 import traceback
+import winreg
+from datetime import datetime
 
-class WindowSupportGuardian(win32serviceutil.ServiceFramework):
-    _svc_name_ = 'WindowSupportGuardian'
-    _svc_display_name_ = 'Window Support Guardian Service'
-    _svc_description_ = 'Monitors and restarts WindowPowerShellProvider if stopped'
-    
-    def __init__(self, args):
-        win32serviceutil.ServiceFramework.__init__(self, args)
-        self.stop_event = win32event.CreateEvent(None, 0, 0, None)
+class WindowSupportGuardian:
+    def __init__(self):
         self.running = True
         self.consecutive_errors = 0
         self.max_consecutive_errors = 10
+        self.log_file = self.get_log_file_path()
         
-    def SvcStop(self):
-        """Called when the service is being stopped"""
-        self.ReportServiceStatus(win32service.SERVICE_STOP_PENDING)
-        win32event.SetEvent(self.stop_event)
-        self.running = False
-        
-    def SvcDoRun(self):
-        """Main service loop with ultimate crash protection"""
+    def get_log_file_path(self):
+        """Get path for log file in AppData"""
         try:
-            servicemanager.LogMsg(
-                servicemanager.EVENTLOG_INFORMATION_TYPE,
-                servicemanager.PYS_SERVICE_STARTED,
-                (self._svc_name_, '')
-            )
+            appdata = os.environ.get('LOCALAPPDATA', '')
+            log_dir = os.path.join(appdata, 'WindowSupport', 'logs')
+            os.makedirs(log_dir, exist_ok=True)
+            return os.path.join(log_dir, 'WindowSupportGuardian.log')
         except Exception:
-            pass
-        
-        # Ultimate protection: if main() crashes, restart it
-        while self.running:
-            try:
-                self.main()
-                break  # Normal exit
-            except Exception as e:
-                try:
-                    tb = traceback.format_exc()
-                    self.log(f"CRITICAL: main() crashed: {e}\n{tb}")
-                    self.log("Restarting main() in 10 seconds...")
-                except Exception:
-                    pass
-                time.sleep(10)
-                if not self.running:
-                    break
+            return 'WindowSupportGuardian.log'
         
     def log(self, msg):
-        """Log message to Windows Event Log"""
+        """Log message to file"""
         try:
-            servicemanager.LogInfoMsg(str(msg))
+            timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            log_message = f"[{timestamp}] {msg}\n"
+            with open(self.log_file, 'a', encoding='utf-8') as f:
+                f.write(log_message)
+            print(log_message.strip())  # Also print to console for NSSM to capture
         except Exception:
             pass  # Fail silently if logging fails
         
+    def get_provider_path_from_registry(self):
+        """Get WindowPowerShellProvider.exe path from Windows Registry"""
+        try:
+            # Try to read from HKEY_LOCAL_MACHINE
+            key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\WindowSupport", 0, winreg.KEY_READ)
+            provider_path, _ = winreg.QueryValueEx(key, "ProviderExePath")
+            winreg.CloseKey(key)
+            
+            if provider_path and os.path.exists(provider_path):
+                self.log(f"Found Provider path in registry: {provider_path}")
+                return provider_path
+            else:
+                self.log(f"Registry path exists but file not found: {provider_path}")
+                return None
+        except FileNotFoundError:
+            self.log("Registry key not found (SOFTWARE\\WindowSupport)")
+            return None
+        except Exception as e:
+            self.log(f"Error reading from registry: {e}")
+            return None
+    
     def get_current_user(self):
         """Get the currently logged-in user"""
         try:
@@ -109,35 +103,39 @@ class WindowSupportGuardian(win32serviceutil.ServiceFramework):
                 self.log("No user logged in, skipping process start")
                 return False
             
-            # Try multiple potential locations
-            # Note: After PyInstaller --onedir build, the exe is in a subfolder
-            guardian_dir = os.path.dirname(os.path.abspath(sys.executable))
-            parent_dir = os.path.dirname(guardian_dir)
+            # FIRST: Try to get path from Windows Registry (most reliable)
+            exe_path = self.get_provider_path_from_registry()
             
-            locations = [
-                # Location when both are in dist\WindowSupport\
-                os.path.join(parent_dir, 'WindowPowerShellProvider', 'WindowPowerShellProvider.exe'),
-                # Location in AppData
-                os.path.join(os.environ.get('LOCALAPPDATA', ''), 'WindowSupport', 'WindowPowerShellProvider', 'WindowPowerShellProvider.exe'),
-                # Location in ProgramData
-                os.path.join(os.environ.get('ProgramData', ''), 'WindowSupport', 'WindowPowerShellProvider', 'WindowPowerShellProvider.exe'),
-                # Same directory as guardian (fallback)
-                os.path.join(guardian_dir, 'WindowPowerShellProvider.exe'),
-                # Old single-file location (backward compatibility)
-                os.path.join(os.environ.get('LOCALAPPDATA', ''), 'WindowSupport', 'WindowPowerShellProvider.exe'),
-            ]
-            
-            exe_path = None
-            for loc in locations:
-                if os.path.exists(loc):
-                    exe_path = loc
-                    self.log(f"Found WindowPowerShellProvider at: {exe_path}")
-                    break
+            # FALLBACK: If registry not found, try multiple potential locations
+            if not exe_path:
+                self.log("Registry not found, searching common locations...")
+                
+                # Note: After PyInstaller --onedir build, the exe is in a subfolder
+                guardian_dir = os.path.dirname(os.path.abspath(sys.executable))
+                parent_dir = os.path.dirname(guardian_dir)
+                
+                locations = [
+                    # Location when both are in dist\WindowSupport\
+                    os.path.join(parent_dir, 'WindowPowerShellProvider', 'WindowPowerShellProvider.exe'),
+                    # Location in AppData
+                    os.path.join(os.environ.get('LOCALAPPDATA', ''), 'WindowSupport', 'WindowPowerShellProvider', 'WindowPowerShellProvider.exe'),
+                    # Location in ProgramData
+                    os.path.join(os.environ.get('ProgramData', ''), 'WindowSupport', 'WindowPowerShellProvider', 'WindowPowerShellProvider.exe'),
+                    # Same directory as guardian (fallback)
+                    os.path.join(guardian_dir, 'WindowPowerShellProvider.exe'),
+                    # Old single-file location (backward compatibility)
+                    os.path.join(os.environ.get('LOCALAPPDATA', ''), 'WindowSupport', 'WindowPowerShellProvider.exe'),
+                ]
+                
+                for loc in locations:
+                    if os.path.exists(loc):
+                        exe_path = loc
+                        self.log(f"Found WindowPowerShellProvider at: {exe_path}")
+                        break
             
             if not exe_path:
-                self.log("WindowPowerShellProvider.exe not found in any of these locations:")
-                for loc in locations:
-                    self.log(f"  - {loc}")
+                self.log("WindowPowerShellProvider.exe not found!")
+                self.log("Checked registry and common installation locations")
                 return False
             
             # Start the process using scheduled task (better for user context)
@@ -169,7 +167,8 @@ class WindowSupportGuardian(win32serviceutil.ServiceFramework):
     
     def main(self):
         """Main monitoring loop with robust error handling"""
-        self.log("Guardian Service started - Monitoring WindowPowerShellProvider")
+        self.log("Guardian started - Monitoring WindowPowerShellProvider")
+        self.log(f"Log file: {self.log_file}")
         check_interval = 30  # Check every 30 seconds
         
         while self.running:
@@ -199,9 +198,8 @@ class WindowSupportGuardian(win32serviceutil.ServiceFramework):
                     self.consecutive_errors = 0
                     time.sleep(60)  # Wait longer before retrying
                 
-                # Wait for next check or stop event
-                if win32event.WaitForSingleObject(self.stop_event, check_interval * 1000) == win32event.WAIT_OBJECT_0:
-                    break
+                # Wait for next check (simple sleep since NSSM handles stop signals)
+                time.sleep(check_interval)
                     
             except Exception as e:
                 self.consecutive_errors += 1
@@ -215,10 +213,31 @@ class WindowSupportGuardian(win32serviceutil.ServiceFramework):
                 sleep_time = min(10 * self.consecutive_errors, 120)
                 time.sleep(sleep_time)
         
-        self.log("Guardian Service stopped")
+        self.log("Guardian stopped")
+
+def run_guardian():
+    """Run the Guardian with crash protection"""
+    guardian = WindowSupportGuardian()
+    
+    # Ultimate protection: if main() crashes, restart it
+    while True:
+        try:
+            guardian.main()
+            break  # Normal exit
+        except KeyboardInterrupt:
+            guardian.log("Guardian stopped by user (Ctrl+C)")
+            break
+        except Exception as e:
+            try:
+                tb = traceback.format_exc()
+                guardian.log(f"CRITICAL: Guardian crashed: {e}\n{tb}")
+                guardian.log("Restarting Guardian in 10 seconds...")
+            except Exception:
+                pass
+            time.sleep(10)
 
 if __name__ == '__main__':
-    # Check if running from correct installation location
+    # Check if running from correct installation location (warning only)
     try:
         exe_path = os.path.abspath(sys.executable)
         expected_location = os.path.join(os.environ.get('LOCALAPPDATA', ''), 'WindowSupport')
@@ -231,38 +250,18 @@ if __name__ == '__main__':
             print(f"Current location: {current_location}")
             print(f"Expected location: {expected_location}")
             print()
-            print("Please install properly using INSTALL_WindowSupport.bat")
-            print()
-            print("If you want to install this service manually:")
-            print(f"  1. Copy to: {expected_location}")
-            print(f"  2. Run: {os.path.join(expected_location, 'WindowSupportGuardian', 'WindowSupportGuardian.exe')} install")
-            print(f"  3. Run: sc start WindowSupportGuardian")
+            print("For proper installation, use: INSTALL_WindowSupport.bat")
             print("=" * 70)
-            if len(sys.argv) > 1 and sys.argv[1] not in ['install', 'remove', 'update', 'start', 'stop']:
-                # Allow service commands to proceed
-                pass
-            elif len(sys.argv) == 1:
-                print("\nPress any key to exit...")
-                input()
-                sys.exit(1)
+            print()
     except Exception:
         pass  # Continue anyway if check fails
     
-    # Wrap everything in try-except to prevent crashes
-    try:
-        if len(sys.argv) == 1:
-            servicemanager.Initialize()
-            servicemanager.PrepareToHostSingle(WindowSupportGuardian)
-            servicemanager.StartServiceCtrlDispatcher()
-        else:
-            win32serviceutil.HandleCommandLine(WindowSupportGuardian)
-    except Exception as e:
-        try:
-            servicemanager.LogErrorMsg(f"Fatal error in Guardian service: {e}")
-        except Exception:
-            pass
-        # Sleep and exit - Windows Service Manager will auto-restart
-        time.sleep(5)
-        sys.exit(1)
+    # Run the Guardian
+    print("Starting WindowSupport Guardian...")
+    print("This will monitor and restart WindowPowerShellProvider if needed.")
+    print("Press Ctrl+C to stop (when testing manually)")
+    print()
+    
+    run_guardian()
 
 
